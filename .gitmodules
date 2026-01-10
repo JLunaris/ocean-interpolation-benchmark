@@ -1,0 +1,3 @@
+[submodule "third-party/netcdf-cxx4"]
+	path = third-party/netcdf-cxx4
+	url = https://github.com/JLunaris/netcdf-cxx4.git
