@@ -56,7 +56,6 @@ ObjCSpaceBeforeProtocolList: true
 PackConstructorInitializers: NextLineOnly # 构造函数初始化器如何放置
 PointerAlignment: Right
 ReflowComments: true
-SeparateDefinitionBlocks: Always # 定义块之间插入1个空行(包括class/struct/enum/function)
 SpaceAfterCStyleCast: true
 SpaceAfterLogicalNot: false
 SpaceAfterTemplateKeyword: false

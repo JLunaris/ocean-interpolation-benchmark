@@ -2,6 +2,7 @@
 
 #include <netcdf>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -12,14 +13,20 @@ struct GeoCoord {
     float lon;
 };
 
-class Dataset
+class GeoGrid
 {
     std::vector<float> m_latitudes;
     std::vector<float> m_longitudes;
     std::vector<float> m_values;
 
 public:
-    Dataset(std::vector<float> latitudes, std::vector<float> longitudes, std::vector<float> values);
+    GeoGrid(std::vector<float> latitudes, std::vector<float> longitudes, std::vector<float> values);
+
+    std::span<const float> latitudes() const { return m_latitudes; }
+    std::span<const float> longitudes() const { return m_longitudes; }
+    std::span<const float> values() const { return m_values; }
+
+    float operator[](size_t latIdx, size_t lonIdx) const { return m_values[latIdx * m_longitudes.size() + lonIdx]; }
 };
 
 class NcReader
@@ -28,7 +35,16 @@ class NcReader
 
 public:
     explicit NcReader(const std::string &filePath);
-    [[nodiscard]] std::optional<std::vector<std::pair<GeoCoord, float>>> readVarFloat(const std::string &varName, size_t time = 0, size_t depth = 0) const;
+    std::optional<GeoGrid> readVarFloat(const std::string &varName, size_t timeIdx = 0, size_t depthIdx = 0) const;
+};
+
+class NcCreator
+{
+    netCDF::NcFile m_file;
+
+public:
+    explicit NcCreator(const std::string &filePath);
+    void writeVarFloat(const std::string &varName, const GeoGrid &geoGrid) const;
 };
 
 } // namespace NcProcess

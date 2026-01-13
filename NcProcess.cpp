@@ -7,7 +7,7 @@ using namespace std;
 
 namespace NcProcess {
 
-Dataset::Dataset(std::vector<float> latitudes, std::vector<float> longitudes, std::vector<float> values)
+GeoGrid::GeoGrid(vector<float> latitudes, vector<float> longitudes, vector<float> values)
         : m_latitudes{std::move(latitudes)}, m_longitudes{std::move(longitudes)}, m_values{std::move(values)}
 {
 }
@@ -17,11 +17,12 @@ NcReader::NcReader(const string &filePath)
 {
 }
 
-optional<vector<pair<GeoCoord, float>>> NcReader::readVarFloat(const string &varName, size_t time, size_t depth) const
+optional<GeoGrid> NcReader::readVarFloat(const string &varName, size_t timeIdx, size_t depthIdx) const
 {
     const NcVar theVar{m_file.getVar(varName)};
 
     // ---------- check routine ----------
+    // This reader expects a 4D float variable with dimensions ordered as (time, depth, latitude, longitude).
     {
         if (theVar.isNull()) {
             println(clog, R"(Variable "{}" does not exist)", varName);
@@ -59,26 +60,43 @@ optional<vector<pair<GeoCoord, float>>> NcReader::readVarFloat(const string &var
     latVar.getVar(latitudes.data());
     lonVar.getVar(longitudes.data());
 
-    const vector<size_t> start{time, depth, 0, 0};
+    const vector<size_t> start{timeIdx, depthIdx, 0, 0};
     const vector<size_t> count{1, 1, nLat, nLon};
 
     vector<float> values(nLat * nLon);
     theVar.getVar(start, count, values.data());
 
     // ---------- assemble result ----------
-    vector<pair<GeoCoord, float>> result;
-    result.reserve(nLat * nLon);
+    return GeoGrid{std::move(latitudes), std::move(longitudes), std::move(values)};
+}
 
-    for (size_t i = 0; i < nLat; ++i) {
-        for (size_t j = 0; j < nLon; ++j) {
-            const size_t idx = i * nLon + j;
-            result.emplace_back(
-                    GeoCoord{latitudes[i], longitudes[j]},
-                    values[idx]);
-        }
-    }
+NcCreator::NcCreator(const std::string &filePath)
+        : m_file{filePath, NcFile::replace}
+{
+}
 
-    return result;
+void NcCreator::writeVarFloat(const string &varName, const GeoGrid &geoGrid) const
+{
+    // 定义维度
+    const NcDim latDim{m_file.addDim("latitude", geoGrid.latitudes().size())};
+    const NcDim lonDim{m_file.addDim("longitude", geoGrid.longitudes().size())};
+
+    // 定义坐标变量
+    const NcVar latVar{m_file.addVar("latitude", netCDF::ncFloat, latDim)};
+    const NcVar lonVar{m_file.addVar("longitude", netCDF::ncFloat, lonDim)};
+
+    // 定义主变量
+    const vector<NcDim> dims{latDim, lonDim};
+    const NcVar dataVar{m_file.addVar(varName, netCDF::ncFloat, dims)};
+
+    // 写坐标数据
+    latVar.putVar(geoGrid.latitudes().data());
+    lonVar.putVar(geoGrid.longitudes().data());
+
+    // 写主变量
+    const std::vector<size_t> start{0, 0};
+    const std::vector<size_t> count{geoGrid.latitudes().size(), geoGrid.longitudes().size()};
+    dataVar.putVar(start, count, geoGrid.values().data());
 }
 
 } // namespace NcProcess
