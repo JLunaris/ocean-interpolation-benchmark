@@ -8,11 +8,6 @@
 
 namespace NcProcess {
 
-struct GeoCoord {
-    float lat;
-    float lon;
-};
-
 class GeoGrid
 {
     std::vector<float> m_latitudes;
@@ -46,5 +41,18 @@ public:
     explicit NcCreator(const std::string &filePath);
     void writeVarFloat(const std::string &varName, const GeoGrid &geoGrid) const;
 };
+
+struct GeoCoord {
+    float lat;
+    float lon;
+};
+
+struct FieldPoint {
+    GeoCoord coord;
+    float value;
+};
+
+// 从规则网格中，随机选出n个点，作为模拟观测数据
+std::vector<FieldPoint> sampleRandomPoints(const GeoGrid &grid, std::size_t sampleCount);
 
 } // namespace NcProcess

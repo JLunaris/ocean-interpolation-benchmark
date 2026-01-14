@@ -28,14 +28,16 @@ int main()
     std::set_terminate(f);
 
     NcProcess::NcReader reader{R"(E:\Projects\ocean-interpolation-benchmark\202505_sst.nc)"};
-    auto t1 = std::chrono::high_resolution_clock::now();
     auto result{*reader.readVarFloat("thetao")};
-    auto t2 = std::chrono::high_resolution_clock::now();
-    cout << format("运行时间: {}ms\n",
-                   std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 
     std::println("{}", result[37, 0]);
 
     NcProcess::NcCreator writer{"example.nc"};
     writer.writeVarFloat("thetao", result);
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    std::println("sample: {}",NcProcess::sampleRandomPoints(result, 500000).size());
+    auto t2 = std::chrono::high_resolution_clock::now();
+    cout << format("运行时间: {}ms\n",
+                   std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 }

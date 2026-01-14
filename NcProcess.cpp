@@ -1,6 +1,8 @@
 #include "NcProcess.h"
 
+#include <algorithm>
 #include <print>
+#include <random>
 
 using namespace netCDF;
 using namespace std;
@@ -97,6 +99,43 @@ void NcCreator::writeVarFloat(const string &varName, const GeoGrid &geoGrid) con
     const std::vector<size_t> start{0, 0};
     const std::vector<size_t> count{geoGrid.latitudes().size(), geoGrid.longitudes().size()};
     dataVar.putVar(start, count, geoGrid.values().data());
+}
+
+vector<FieldPoint> sampleRandomPoints(const GeoGrid &grid, size_t sampleCount)
+{
+    // ---------- collect valid points ----------
+    vector<FieldPoint> validPoints;
+    validPoints.reserve(grid.values().size());
+    auto lats{grid.latitudes()};
+    auto lons{grid.longitudes()};
+
+    for (size_t i{0}; i < lats.size(); ++i) {
+        for (size_t j{0}; j < lons.size(); ++j) {
+            if (std::isnan(grid[i, j])) continue;
+            validPoints.emplace_back(GeoCoord{lats[i], lons[j]}, grid[i, j]);
+        }
+    }
+
+    // ---------- handle corner cases ----------
+    if (sampleCount > validPoints.size()) {
+        // 请求数量大于可用点数，抛异常
+        throw std::invalid_argument("sampleCount > validPoints.");
+    }
+    if (sampleCount == validPoints.size()) {
+        // 请求数量等于可用点数，直接返回全部
+        return validPoints;
+    }
+
+    // ---------- random sampling ----------
+    vector<FieldPoint> samples;
+    samples.reserve(sampleCount);
+
+    random_device seeder;
+    default_random_engine generator{seeder()};
+
+    ranges::sample(validPoints, back_inserter(samples), sampleCount, generator);
+
+    return samples;
 }
 
 } // namespace NcProcess
