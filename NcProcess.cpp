@@ -138,4 +138,12 @@ vector<FieldPoint> sampleRandomPoints(const GeoGrid &grid, size_t sampleCount)
     return samples;
 }
 
+vector<float> generateRange(float start, float end, float step)
+{
+    int n = floor((end - start) / step);
+    return views::iota(0, n) |
+           views::transform([=](int i) { return start + i * step; }) |
+           ranges::to<std::vector>();
+}
+
 } // namespace NcProcess

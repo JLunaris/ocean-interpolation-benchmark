@@ -1,7 +1,11 @@
 #pragma once
 
+#include "GeoCoord.h"
+
+#include <algorithm>
 #include <netcdf>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <vector>
@@ -42,17 +46,15 @@ public:
     void writeVarFloat(const std::string &varName, const GeoGrid &geoGrid) const;
 };
 
-struct GeoCoord {
-    float lat;
-    float lon;
-};
-
-struct FieldPoint {
+struct FieldPoint
+{
     GeoCoord coord;
     float value;
 };
 
 // 从规则网格中，随机选出n个点，作为模拟观测数据
 std::vector<FieldPoint> sampleRandomPoints(const GeoGrid &grid, std::size_t sampleCount);
+
+std::vector<float> generateRange(float start, float end, float step);
 
 } // namespace NcProcess

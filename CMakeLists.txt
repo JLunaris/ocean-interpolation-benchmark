@@ -10,6 +10,8 @@ add_executable(ocean-interpolation-benchmark
         NcProcess.cpp
         NcProcess.h
         cudaTest.cu
+        GeoHashGrid.h
+        GeoCoord.h
 )
 
 set_target_properties(ocean-interpolation-benchmark PROPERTIES

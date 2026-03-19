@@ -4,8 +4,7 @@ AlignAfterOpenBracket: Align
 AlignConsecutiveAssignments: None
 AlignOperands: Align
 AlignTrailingComments: # 是否对齐尾置注释
-  Kind: Never # Always:总是对齐  Never:不对齐,但应用其他格式器(如SpacesBeforeTrailingComments)  Leave:尾置注释前的空格,有几个都行,不动它
-  # 不要调成Leave,会造成Enter换行后不自动缩进,需要手动缩进
+  Kind: Leave # Always:总是对齐  Never:不对齐,但应用其他格式器(如SpacesBeforeTrailingComments)  Leave:尾置注释前的空格,有几个都行,不动它
 AllowAllArgumentsOnNextLine: false
 AllowAllConstructorInitializersOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
@@ -22,9 +21,10 @@ BraceWrapping:
   AfterCaseLabel: false
   AfterClass: true
   AfterControlStatement: MultiLine # 条件有多行时,大括号换行
-  AfterEnum: true
+  AfterEnum: false
   AfterFunction: true
   AfterNamespace: false
+  AfterStruct: true
   AfterUnion: true
   BeforeCatch: false
   BeforeElse: false
@@ -55,7 +55,7 @@ ObjCSpaceAfterProperty: false
 ObjCSpaceBeforeProtocolList: true
 PackConstructorInitializers: NextLineOnly # 构造函数初始化器如何放置
 PointerAlignment: Right
-ReflowComments: true
+ReflowComments: Always
 SpaceAfterCStyleCast: true
 SpaceAfterLogicalNot: false
 SpaceAfterTemplateKeyword: false
