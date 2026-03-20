@@ -12,6 +12,7 @@ add_executable(ocean-interpolation-benchmark
         cudaTest.cu
         GeoHashGrid.h
         GeoCoord.h
+        InterpolationManager.h
 )
 
 set_target_properties(ocean-interpolation-benchmark PROPERTIES

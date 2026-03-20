@@ -1,3 +1,4 @@
+#include "InterpolationManager.h"
 #include "NcProcess.h"
 
 #include <chrono>
@@ -7,7 +8,6 @@
 #include <vector>
 
 using std::cout;
-using std::format;
 using namespace netCDF;
 
 void f()
@@ -30,14 +30,19 @@ int main()
     NcProcess::NcReader reader{R"(E:\Projects\ocean-interpolation-benchmark\202505_sst.nc)"};
     auto result{*reader.readVarFloat("thetao")};
 
-    std::println("{}", result[37, 0]);
+    // 生成真实样本点
+    std::vector<NcProcess::FieldPoint> samplePoints = NcProcess::sampleRandomPoints(result, 500'000);
+    InterpolationManager manager{std::move(samplePoints), 1};
 
-    NcProcess::NcCreator writer{"example.nc"};
-    writer.writeVarFloat("thetao", result);
+    // 设定插值的范围和步长
+    std::vector latitudes{NcProcess::generateRange(-90.0, 90, 0.1)};
+    std::vector longitudes{NcProcess::generateRange(-180, 180, 0.1)};
 
     auto t1 = std::chrono::high_resolution_clock::now();
-    std::println("sample: {}",NcProcess::sampleRandomPoints(result, 500000).size());
+    auto values = manager.interpolate(latitudes, longitudes, 1, 10);
     auto t2 = std::chrono::high_resolution_clock::now();
-    cout << format("运行时间: {}ms\n",
-                   std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
+    std::println("运行时间: {}ms\n", std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
+
+    NcProcess::NcCreator writer{"example.nc"};
+    writer.writeVarFloat("thetao", {latitudes, longitudes, values});
 }

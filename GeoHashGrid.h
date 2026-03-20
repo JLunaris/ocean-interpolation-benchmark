@@ -90,7 +90,7 @@ public:
             : m_indexer{cellSize}
     {}
 
-    void insertPointUnsafe(const PointDataType &point, const GeoCoord &coord)
+    void insertPoint(const PointDataType &point, const GeoCoord &coord)
     {
         m_map.emplace(m_indexer.toGrid(coord), point);
     }
