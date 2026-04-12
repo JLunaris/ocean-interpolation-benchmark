@@ -3,20 +3,28 @@ project(ocean-interpolation-benchmark CXX CUDA)
 
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CUDA_ARCHITECTURES native)
 set(CMAKE_PREFIX_PATH "E:/DE/netCDF 4.9.3")
 
 add_executable(ocean-interpolation-benchmark
         main.cpp
         NcProcess.cpp
         NcProcess.h
-        cudaTest.cu
         GeoHashGrid.h
         GeoCoord.h
         InterpolationManager.h
+        CudaBridge.cuh
+        CudaMain.cu
+        CudaInterpolationManager.cuh
+        CudaInterpolationManager.cu
 )
 
 set_target_properties(ocean-interpolation-benchmark PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON
+)
+
+target_compile_options(ocean-interpolation-benchmark PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
 )
 
 add_subdirectory(third-party/netcdf-cxx4)

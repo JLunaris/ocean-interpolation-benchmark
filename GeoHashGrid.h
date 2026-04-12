@@ -5,8 +5,11 @@
 #include <algorithm>
 #include <cassert>
 #include <functional>
-#include <print>
 #include <ranges>
+
+#ifndef __CUDACC__
+#include <print>
+#endif
 
 namespace GeoSpatial {
 
@@ -22,6 +25,7 @@ struct GridIndex
 
 namespace std {
 
+#ifndef __CUDACC__
 template<>
 struct formatter<GeoSpatial::GridIndex>
 {
@@ -37,6 +41,7 @@ struct formatter<GeoSpatial::GridIndex>
         return std::format_to(ctx.out(), "({}, {})", p.x, p.y);
     }
 };
+#endif
 
 template<>
 struct hash<GeoSpatial::GridIndex>
@@ -75,6 +80,7 @@ public:
         };
     }
 
+    float cellSize() const { return m_cellSize; }
     int minX() const { return m_minX; }
     int maxX() const { return m_maxX; }
 };
@@ -95,7 +101,8 @@ public:
         m_map.emplace(m_indexer.toGrid(coord), point);
     }
 
-    auto map() const { return m_map; }
+    const auto &map() const { return m_map; }
+    const auto &indexer() const { return m_indexer; }
 
     /**
      * @param transToGeoCoord FunctionType: GeoCoord(const PointDataType &)
@@ -122,52 +129,22 @@ public:
 
         int x0 = topLeftGrid.x;
         int x1 = bottomRightGrid.x;
-        if (x0 <= x1) {
-            for (int x: std::views::iota(x0, x1 + 1)) {
-                for (int y: std::views::iota(bottomRightGrid.y, topLeftGrid.y + 1)) {
-                    GridIndex gridIndex{x, y};
-                    auto [begin, end]{m_map.equal_range(gridIndex)};
-                    for (auto iter{begin}; iter != end; ++iter) {
-                        const GeoCoord theCoord{transToGeoCoord(iter->second)};
-                        const float deltaLat = theCoord.latitude() - queryCoord.latitude();
-                        const float deltaLon = GeoCoord::normalizeLongitude(theCoord.longitude() - queryCoord.longitude());
-                        const float distSq = deltaLat * deltaLat + deltaLon * deltaLon;
+        int minX = m_indexer.minX();
+        int maxX = m_indexer.maxX();
+        int x1PlusOne = (x1 == maxX ? minX : x1 + 1);
 
-                        if (distSq < radiusSquared)
-                            result.emplace_back(iter->second, distSq);
-                    }
-                }
-            }
-        } else {
-            for (int x: std::views::iota(x0, m_indexer.maxX())) {
-                for (int y: std::views::iota(bottomRightGrid.y, topLeftGrid.y + 1)) {
-                    GridIndex gridIndex{x, y};
-                    auto [begin, end]{m_map.equal_range(gridIndex)};
-                    for (auto iter{begin}; iter != end; ++iter) {
-                        const GeoCoord theCoord{transToGeoCoord(iter->second)};
-                        const float deltaLat = theCoord.latitude() - queryCoord.latitude();
-                        const float deltaLon = GeoCoord::normalizeLongitude(theCoord.longitude() - queryCoord.longitude());
-                        const float distSq = deltaLat * deltaLat + deltaLon * deltaLon;
+        for (int x = x0; x != x1PlusOne; x = (x == maxX ? minX : x + 1)) {
+            for (int y = bottomRightGrid.y; y <= topLeftGrid.y; ++y) {
+                GridIndex gridIndex{x, y};
+                auto [begin, end]{m_map.equal_range(gridIndex)};
+                for (auto iter{begin}; iter != end; ++iter) {
+                    const GeoCoord theCoord{transToGeoCoord(iter->second)};
+                    const float deltaLat = theCoord.latitude() - queryCoord.latitude();
+                    const float deltaLon = GeoCoord::normalizeLongitude(theCoord.longitude() - queryCoord.longitude());
+                    const float distSq = deltaLat * deltaLat + deltaLon * deltaLon;
 
-                        if (distSq < radiusSquared)
-                            result.emplace_back(iter->second, distSq);
-                    }
-                }
-            }
-
-            for (int x: std::views::iota(m_indexer.minX(), x1 + 1)) {
-                for (int y: std::views::iota(bottomRightGrid.y, topLeftGrid.y + 1)) {
-                    GridIndex gridIndex{x, y};
-                    auto [begin, end]{m_map.equal_range(gridIndex)};
-                    for (auto iter{begin}; iter != end; ++iter) {
-                        const GeoCoord theCoord{transToGeoCoord(iter->second)};
-                        const float deltaLat = theCoord.latitude() - queryCoord.latitude();
-                        const float deltaLon = GeoCoord::normalizeLongitude(theCoord.longitude() - queryCoord.longitude());
-                        const float distSq = deltaLat * deltaLat + deltaLon * deltaLon;
-
-                        if (distSq < radiusSquared)
-                            result.emplace_back(iter->second, distSq);
-                    }
+                    if (distSq < radiusSquared)
+                        result.emplace_back(iter->second, distSq);
                 }
             }
         }
