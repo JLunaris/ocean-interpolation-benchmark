@@ -7,24 +7,14 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
-struct TransToGeoCoord
-{
-    cuda::std::span<const CudaBridge::FieldPoint> samplePoints;
-
-    __device__ CudaBridge::GeoCoord operator()(std::size_t i) const
-    {
-        return samplePoints[i].coord;
-    }
-};
-
 /**
+ * @tparam neighborN 插值参考点个数（个数不够 → 拒绝插值, 个数过多 → 选择最近的）
  * @param results 插值结果
  * @param latitudes 所有要插值的纬度
  * @param longitudes 所有要插值的经度
  * @param samplePoints 插值参考样本
  * @param hashGrid 空间索引
  * @param radius 插值参考范围圆的半径
- * @param neighborN 插值参考点个数（个数不够 → 拒绝插值, 个数过多 → 选择最近的）
  */
 template<int neighborN>
 __global__ void interpolateKernel(cuda::std::span<float> results,
@@ -34,19 +24,9 @@ __global__ void interpolateKernel(cuda::std::span<float> results,
                                   CudaBridge::GeoHashGrid<std::size_t>::GeoHashGridView hashGrid,
                                   float radius)
 {
-    // struct TransToGeoCoord
-    // {
-    //     __device__ CudaBridge::GeoCoord operator()(std::size_t i) const
-    //     {
-    //         return samplePoints[i].coord;
-    //     }
-    // };
-
     int nLat = latitudes.size();
     int nLon = longitudes.size();
     int total = nLat * nLon;
-
-    TransToGeoCoord trans{samplePoints};
 
     for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < total; idx += blockDim.x * gridDim.x) {
         const int i = idx / nLon;   // latitude idx
@@ -56,7 +36,7 @@ __global__ void interpolateKernel(cuda::std::span<float> results,
         float lon = longitudes[j];
 
         CudaBridge::GeoCoord interpPoint{lat, lon};
-        auto samplesInRadius = hashGrid.findKnnInRadius<neighborN>(interpPoint, radius, trans);
+        auto samplesInRadius = hashGrid.findKnnInRadius<neighborN>(interpPoint, radius, [&samplePoints](std::size_t i) { return samplePoints[i].coord; });
 
         float result{cuda::std::numeric_limits<float>::quiet_NaN()};
         if (samplesInRadius.size() != neighborN) {

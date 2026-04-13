@@ -153,6 +153,14 @@ public:
         }
     }
 
+    ~GeoHashGrid()
+    {
+        thrust::host_vector<cuda::std::span<PointDataType>> cells(m_cells);
+        for (auto cell: cells) {
+            if (cell.data()) cudaFree(cell.data());
+        }
+    }
+
     GeoHashGridView view() const
     {
         return {m_indexer, thrust::raw_pointer_cast(m_cells.data())};
@@ -167,15 +175,6 @@ class GeoHashGrid<PointDataType>::GeoHashGridView
     cuda::std::span<PointDataType> const *m_cells{nullptr};
 
 private:
-    struct Compare
-    {
-        __device__ bool operator()(const cuda::std::pair<PointDataType, float> &a,
-                                   const cuda::std::pair<PointDataType, float> &b) const
-        {
-            return a.second < b.second;
-        }
-    };
-
     __device__ std::size_t mapToArrayIdx(const GridIndex &gridIdx) const
     {
         int minX{m_indexer.minX()};
@@ -238,10 +237,10 @@ public:
                         if (result.size() < K) {
                             result.emplace_back(cuda::std::make_pair(point, distSq));
                         } else {
-                            auto it = cuda::std::max_element(
-                                    result.begin(),
-                                    result.end(),
-                                    Compare{});
+                            auto it = cuda::std::max_element(result.begin(), result.end(),
+                                                             [](const auto &a,const auto &b) {
+                                                                 return a.second < b.second;
+                                                             });
                             if (distSq < it->second) {
                                 *it = {point, distSq};
                             }
