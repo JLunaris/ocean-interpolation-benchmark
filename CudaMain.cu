@@ -13,11 +13,11 @@ int main()
     CudaInterpolationManager manager{samplePoints, 1};
 
     // 设定插值的范围和步长
-    std::vector latitudes{NcProcess::generateRange(-90.0, 90, 0.083)};
-    std::vector longitudes{NcProcess::generateRange(-180, 180, 0.083)};
+    std::vector latitudes{NcProcess::generateRange(-80.0, 80, 0.083)};
+    std::vector longitudes{NcProcess::generateRange(-170, 170, 0.083)};
 
     auto t1 = std::chrono::high_resolution_clock::now();
-    auto values = manager.interpolate(latitudes, longitudes, 2, 10);
+    auto values = manager.interpolate<10>(latitudes, longitudes, 2);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::cout << std::format("运行时间: {}ms\n", std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 

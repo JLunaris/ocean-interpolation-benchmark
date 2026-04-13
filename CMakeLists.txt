@@ -9,14 +9,7 @@ set(CMAKE_PREFIX_PATH "E:/DE/netCDF 4.9.3")
 add_executable(ocean-interpolation-benchmark
         main.cpp
         NcProcess.cpp
-        NcProcess.h
-        GeoHashGrid.h
-        GeoCoord.h
-        InterpolationManager.h
-        CudaBridge.cuh
         CudaMain.cu
-        CudaInterpolationManager.cuh
-        CudaInterpolationManager.cu
 )
 
 set_target_properties(ocean-interpolation-benchmark PROPERTIES

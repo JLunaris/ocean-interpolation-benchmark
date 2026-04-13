@@ -3,6 +3,7 @@
 #include "GeoHashGrid.h"
 #include "NcProcess.h"
 
+#include <cuda/std/inplace_vector>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
@@ -119,123 +120,13 @@ public:
 template<typename PointDataType>
 class GeoHashGrid
 {
-    ScaleGridIndexer m_indexer;
-    thrust::device_vector<cuda::std::span<PointDataType>> m_cells;
-
 public:
     // trivially copyable 的视图对象
-    class GeoHashGridView
-    {
-        ScaleGridIndexer m_indexer;
-        cuda::std::span<PointDataType> const *m_cells{nullptr};
+    class GeoHashGridView;
 
-    public:
-        template<int K>
-        class KnnResult
-        {
-            cuda::std::array<cuda::std::pair<PointDataType, float>, K> m_data;
-            int m_size{0};
-
-            struct Compare
-            {
-                __device__ bool operator()(const cuda::std::pair<PointDataType, float> &a,
-                                           const cuda::std::pair<PointDataType, float> &b) const
-                {
-                    return a.second < b.second;
-                }
-            };
-
-        public:
-            __device__ void push(cuda::std::pair<PointDataType, float> element)
-            {
-                if (m_size < K) {
-                    m_data[m_size++] = cuda::std::move(element);
-                } else {
-                    auto it = cuda::std::max_element(
-                            m_data.cbegin(),
-                            m_data.cend(),
-                            Compare{});
-                    if (element.second < it->second) {
-                        *it = cuda::std::move(element);
-                    }
-                }
-            }
-
-            const cuda::std::array<cuda::std::pair<PointDataType, float>, K> &array() const { return m_data; }
-            int size() const { return m_size; }
-        };
-
-    private:
-        std::size_t mapToArrayIdx(const GridIndex &gridIdx) const
-        {
-            int minX{m_indexer.minX()};
-            int maxX{m_indexer.maxX()};
-            int maxY{m_indexer.maxY()};
-
-            auto [x, y]{gridIdx};
-            int width = maxX - minX + 1;
-            return (maxY - y) * width + (x - minX);
-        }
-
-    public:
-        GeoHashGridView(const ScaleGridIndexer &indexer, cuda::std::span<PointDataType> const *cells)
-                : m_indexer(indexer), m_cells(cells)
-        {}
-
-        /**
-         * @param transToGeoCoord FunctionType: CudaBridge::GeoCoord(const PointDataType &)
-         */
-        template<int K>
-        __device__ KnnResult<K> findKnnInRadius(const GeoCoord &queryCoord,
-                                                float radius,
-                                                auto transToGeoCoord) const
-        {
-            if (!queryCoord.isValid()) {
-                printf("queryCoord is invalid");
-                return {};
-            }
-
-            const GeoCoord boundingRectTopLeft{
-                    cuda::std::min(queryCoord.latitude() + radius, 90.f),
-                    GeoCoord::normalizeLongitude(queryCoord.longitude() - radius)};
-            const GeoCoord boundingRectBottomRight{
-                    cuda::std::max(queryCoord.latitude() - radius, -90.f),
-                    GeoCoord::normalizeLongitude(queryCoord.longitude() + radius)};
-
-            GridIndex topLeftGrid = m_indexer.toGrid(boundingRectTopLeft);
-            GridIndex bottomRightGrid = m_indexer.toGrid(boundingRectBottomRight);
-            const float radiusSquared = radius * radius;
-
-            KnnResult<K> result;
-
-            int x0 = topLeftGrid.x;
-            int x1 = bottomRightGrid.x;
-            int minX = m_indexer.minX();
-            int maxX = m_indexer.maxX();
-            int x1PlusOne = (x1 == maxX ? minX : x1 + 1);
-
-            for (int x = x0; x != x1PlusOne; x = (x == maxX ? minX : x + 1)) {
-                for (int y = bottomRightGrid.y; y <= topLeftGrid.y; ++y) {
-                    GridIndex gridIndex{x, y};
-                    const auto &cell = m_cells[mapToArrayIdx(gridIndex)];
-                    auto points = cell.data();
-                    auto pointsCount = cell.size();
-
-                    for (size_t i = 0; i < pointsCount; ++i) {
-                        const GeoCoord theCoord{transToGeoCoord(points[i])};
-                        const float deltaLat = theCoord.latitude() - queryCoord.latitude();
-                        const float deltaLon = GeoCoord::normalizeLongitude(theCoord.longitude() - queryCoord.longitude());
-                        const float distSq = deltaLat * deltaLat + deltaLon * deltaLon;
-
-                        if (distSq < radiusSquared)
-                            result.push({cell[i], distSq});
-                    }
-                }
-            }
-
-            return result;
-        }
-    };
+private:
+    ScaleGridIndexer m_indexer;
+    thrust::device_vector<cuda::std::span<PointDataType>> m_cells;
 
 public:
     explicit GeoHashGrid(const GeoSpatial::GeoHashGrid<PointDataType> &srcHashGrid)
@@ -243,13 +134,14 @@ public:
     {
         const std::unordered_multimap<GeoSpatial::GridIndex, PointDataType> &srcMap{srcHashGrid.map()};
 
-        for (int x: std::views::iota(m_indexer.minX(), m_indexer.maxX() + 1)) {
-            for (int y: std::views::iota(m_indexer.minY(), m_indexer.maxY() + 1) | std::views::reverse) {
+        for (int y: std::views::iota(m_indexer.minY(), m_indexer.maxY() + 1) | std::views::reverse) {
+            for (int x: std::views::iota(m_indexer.minX(), m_indexer.maxX() + 1)) {
                 auto [begin, end]{srcMap.equal_range({x, y})};
-                auto range = std::ranges::subrange(begin, end);
-                auto values_view = range | std::views::values;
-                std::vector<PointDataType> values(values_view.begin(), values_view.end());
-
+                auto values_view = std::ranges::subrange(begin, end) |
+                                   std::views::transform([](const auto &kv) -> const PointDataType & {
+                                       return kv.second;
+                                   });
+                std::vector<PointDataType> values{values_view.begin(), values_view.end()};
                 PointDataType *cell{nullptr};
                 if (!values.empty()) {
                     cudaMalloc(&cell, sizeof(PointDataType) * values.size());
@@ -265,13 +157,101 @@ public:
     {
         return {m_indexer, thrust::raw_pointer_cast(m_cells.data())};
     }
+};
 
-    ~GeoHashGrid()
+// trivially copyable 的视图对象
+template<typename PointDataType>
+class GeoHashGrid<PointDataType>::GeoHashGridView
+{
+    ScaleGridIndexer m_indexer;
+    cuda::std::span<PointDataType> const *m_cells{nullptr};
+
+private:
+    struct Compare
     {
-        thrust::host_vector<cuda::std::span<PointDataType>> cells(m_cells);
-        for (auto cell: cells) {
-            if (cell.data()) cudaFree(cell.data());
+        __device__ bool operator()(const cuda::std::pair<PointDataType, float> &a,
+                                   const cuda::std::pair<PointDataType, float> &b) const
+        {
+            return a.second < b.second;
         }
+    };
+
+    __device__ std::size_t mapToArrayIdx(const GridIndex &gridIdx) const
+    {
+        int minX{m_indexer.minX()};
+        int maxX{m_indexer.maxX()};
+        int maxY{m_indexer.maxY()};
+
+        auto [x, y]{gridIdx};
+        int width = maxX - minX + 1;
+        return (maxY - y) * width + (x - minX);
+    }
+
+public:
+    GeoHashGridView(const ScaleGridIndexer &indexer, cuda::std::span<PointDataType> const *cells)
+            : m_indexer(indexer), m_cells(cells)
+    {}
+
+    /**
+     * @param transToGeoCoord FunctionType: CudaBridge::GeoCoord(const PointDataType &)
+     */
+    template<int K>
+    __device__ cuda::std::inplace_vector<cuda::std::pair<PointDataType, float>, K> findKnnInRadius(const GeoCoord &queryCoord,
+                                                                                                   float radius,
+                                                                                                   auto transToGeoCoord) const
+    {
+        if (!queryCoord.isValid()) {
+            printf("queryCoord is invalid");
+            return {};
+        }
+
+        const GeoCoord boundingRectTopLeft{
+                cuda::std::min(queryCoord.latitude() + radius, 90.f),
+                GeoCoord::normalizeLongitude(queryCoord.longitude() - radius)};
+        const GeoCoord boundingRectBottomRight{
+                cuda::std::max(queryCoord.latitude() - radius, -90.f),
+                GeoCoord::normalizeLongitude(queryCoord.longitude() + radius)};
+
+        GridIndex topLeftGrid = m_indexer.toGrid(boundingRectTopLeft);
+        GridIndex bottomRightGrid = m_indexer.toGrid(boundingRectBottomRight);
+        const float radiusSquared = radius * radius;
+
+        cuda::std::inplace_vector<cuda::std::pair<PointDataType, float>, K> result;
+
+        const int x0 = topLeftGrid.x;
+        const int x1 = bottomRightGrid.x;
+        const int minX = m_indexer.minX();
+        const int maxX = m_indexer.maxX();
+        const int x1PlusOne = (x1 == maxX ? minX : x1 + 1);
+
+        for (int x = x0; x != x1PlusOne; x = (x == maxX ? minX : x + 1)) {
+            for (int y = bottomRightGrid.y; y <= topLeftGrid.y; ++y) {
+                GridIndex gridIndex{x, y};
+                const auto &cell = m_cells[mapToArrayIdx(gridIndex)];
+                for (const auto &point: cell) {
+                    const GeoCoord theCoord{transToGeoCoord(point)};
+                    const float deltaLat = theCoord.latitude() - queryCoord.latitude();
+                    const float deltaLon = GeoCoord::normalizeLongitude(theCoord.longitude() - queryCoord.longitude());
+                    const float distSq = deltaLat * deltaLat + deltaLon * deltaLon;
+
+                    if (distSq < radiusSquared) {
+                        if (result.size() < K) {
+                            result.emplace_back(cuda::std::make_pair(point, distSq));
+                        } else {
+                            auto it = cuda::std::max_element(
+                                    result.begin(),
+                                    result.end(),
+                                    Compare{});
+                            if (distSq < it->second) {
+                                *it = {point, distSq};
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 };
 
