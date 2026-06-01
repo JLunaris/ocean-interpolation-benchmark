@@ -41,7 +41,7 @@ __global__ void interpolateKernel(cuda::std::span<float> results,
         float result{cuda::std::numeric_limits<float>::quiet_NaN()};
         if (samplesInRadius.size() != neighborN) {
             results[idx] = result;
-            return;
+            continue;
         }
 
         float sumWeight{};
