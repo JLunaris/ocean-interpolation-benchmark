@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.1)
 project(ocean-interpolation-benchmark CXX CUDA)
 
-set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 23)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CUDA_ARCHITECTURES native)
 set(CMAKE_PREFIX_PATH "E:/DE/netCDF 4.9.3")

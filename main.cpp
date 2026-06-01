@@ -26,7 +26,7 @@ int mainOnCPU()
 {
     std::set_terminate(f);
 
-    NcProcess::NcReader reader{R"(E:\Projects\ocean-interpolation-benchmark\202505_sst.nc)"};
+    NcProcess::NcReader reader{R"(E:\Projects\ocean-interpolation-benchmark\resource\202505_sst.nc)"};
     auto result{*reader.readVarFloat("thetao")};
 
     // 生成真实样本点
@@ -42,7 +42,7 @@ int mainOnCPU()
     auto t2 = std::chrono::high_resolution_clock::now();
     std::println("运行时间: {}ms\n", std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 
-    NcProcess::NcCreator writer{"example.nc"};
+    NcProcess::NcCreator writer{"result.nc"};
     writer.writeVarFloat("thetao", {latitudes, longitudes, values});
 
     return 0;

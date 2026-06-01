@@ -24,6 +24,7 @@ public:
     std::span<const float> latitudes() const { return m_latitudes; }
     std::span<const float> longitudes() const { return m_longitudes; }
     std::span<const float> values() const { return m_values; }
+    std::span<float> values() { return m_values; }
 
 #ifndef __CUDACC__
     float operator[](size_t latIdx, size_t lonIdx) const { return m_values[latIdx * m_longitudes.size() + lonIdx]; }

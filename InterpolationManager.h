@@ -17,8 +17,11 @@ public:
             : m_samplePoints{std::move(samplePoints)}, m_hashGrid{cellSize}
     {
         // 为参考样本建立空间索引
-        for (const auto &[i, p]: std::views::enumerate(m_samplePoints))
-            m_hashGrid.insertPoint(i, p.coord);
+        // for (const auto &[i, p]: std::views::enumerate(m_samplePoints))
+        for (int i = 0; i < m_samplePoints.size(); ++i) {
+            m_hashGrid.insertPoint(i, m_samplePoints[i].coord);
+        }
+        //     m_hashGrid.insertPoint(i, p.coord);
     }
 
     /**
@@ -33,34 +36,38 @@ public:
         std::vector<float> values;
         values.reserve(latitudes.size() * longitudes.size());
 
-        for (const auto &[lat, lon]: std::views::cartesian_product(latitudes, longitudes)) {
-            GeoCoord interpPoint{lat, lon};
-            auto samplesInRadius = m_hashGrid.findGeoPointsInRadius(interpPoint, radius, [this](std::size_t i) { return m_samplePoints[i].coord; });
+        // for (const auto &[lat, lon]: std::views::cartesian_product(latitudes, longitudes)) {
 
-            float result{std::numeric_limits<float>::quiet_NaN()};
+        for (const auto lat: latitudes) {
+            for (const auto lon: longitudes) {
+                GeoCoord interpPoint{lat, lon};
+                auto samplesInRadius = m_hashGrid.findGeoPointsInRadius(interpPoint, radius, [this](std::size_t i) { return m_samplePoints[i].coord; });
 
-            if (samplesInRadius.size() > neighborN) {
-                std::ranges::nth_element(samplesInRadius, begin(samplesInRadius) + neighborN - 1,
-                                         {}, [](const auto &element) { return element.second; });
-                samplesInRadius.resize(neighborN);
-            }
+                float result{std::numeric_limits<float>::quiet_NaN()};
 
-            if (samplesInRadius.size() == neighborN) {
-                float sumWeight{};
-                float sumValue{};
-                for (auto [sampleIdx, distSq]: samplesInRadius ) {
-                    if (distSq < std::numeric_limits<float>::epsilon()) {
-                        result = m_samplePoints[sampleIdx].value; // 精确命中
-                        goto Out;
-                    }
-                    float weight{1 / distSq};
-                    sumWeight += weight;
-                    sumValue += weight * m_samplePoints[sampleIdx].value;
+                if (samplesInRadius.size() > neighborN) {
+                    std::ranges::nth_element(samplesInRadius, begin(samplesInRadius) + neighborN - 1,
+                                             {}, [](const auto &element) { return element.second; });
+                    samplesInRadius.resize(neighborN);
                 }
-                result = sumValue / sumWeight;
+
+                if (samplesInRadius.size() == neighborN) {
+                    float sumWeight{};
+                    float sumValue{};
+                    for (auto [sampleIdx, distSq]: samplesInRadius ) {
+                        if (distSq < std::numeric_limits<float>::epsilon()) {
+                            result = m_samplePoints[sampleIdx].value; // 精确命中
+                            goto Out;
+                        }
+                        float weight{1 / distSq};
+                        sumWeight += weight;
+                        sumValue += weight * m_samplePoints[sampleIdx].value;
+                    }
+                    result = sumValue / sumWeight;
+                }
+                Out:
+                    values.push_back(result);
             }
-        Out:
-            values.push_back(result);
         }
 
         return values;

@@ -17,23 +17,23 @@
  * @param radius 插值参考范围圆的半径
  */
 template<int neighborN>
-__global__ void interpolateKernel(cuda::std::span<float> results,
-                                  cuda::std::span<const float> latitudes,
-                                  cuda::std::span<const float> longitudes,
-                                  cuda::std::span<const CudaBridge::FieldPoint> samplePoints,
-                                  CudaBridge::GeoHashGrid<std::size_t>::GeoHashGridView hashGrid,
-                                  float radius)
+__global__ void interpolate(cuda::std::span<float> results,
+                            cuda::std::span<const float> latitudes,
+                            cuda::std::span<const float> longitudes,
+                            cuda::std::span<const CudaBridge::FieldPoint> samplePoints,
+                            CudaBridge::GeoHashGrid<std::size_t>::GeoHashGridView hashGrid,
+                            float radius)
 {
-    int nLat = latitudes.size();
-    int nLon = longitudes.size();
-    int total = nLat * nLon;
+    const int nLat = latitudes.size();
+    const int nLon = longitudes.size();
+    const int total = nLat * nLon;
 
     for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < total; idx += blockDim.x * gridDim.x) {
-        const int i = idx / nLon;   // latitude idx
-        const int j = idx % nLon;   // longitude idx
+        const int latIdx = idx / nLon;   // latitude idx
+        const int lonIdx = idx % nLon;   // longitude idx
 
-        float lat = latitudes[i];
-        float lon = longitudes[j];
+        const float lat = latitudes[latIdx];
+        const float lon = longitudes[lonIdx];
 
         CudaBridge::GeoCoord interpPoint{lat, lon};
         auto samplesInRadius = hashGrid.findKnnInRadius<neighborN>(interpPoint, radius, [&samplePoints](std::size_t i) { return samplePoints[i].coord; });
@@ -58,7 +58,7 @@ __global__ void interpolateKernel(cuda::std::span<float> results,
         }
         result = sumValue / sumWeight;
     Out:
-        results[idx] = result;/* 插值结果 */
+        results[idx] = result; // 插值结果
     }
 }
 
@@ -110,16 +110,16 @@ public:
         int nLon = longitudeSpan.size();
         int total = nLat * nLon;
 
-        int blockSize = 256;
+        int blockSize = 128;
 
         int gridSize = cuda::ceil_div(total, blockSize);
 
-        interpolateKernel<neighborN><<<gridSize, blockSize>>>(resultSpan,
-                                                              latitudesSpan,
-                                                              longitudeSpan,
-                                                              samplePointsSpan,
-                                                              m_hashGrid->view(),
-                                                              radius);
+        ::interpolate<neighborN><<<gridSize, blockSize>>>(resultSpan,
+                                                          latitudesSpan,
+                                                          longitudeSpan,
+                                                          samplePointsSpan,
+                                                          m_hashGrid->view(),
+                                                          radius);
         cudaDeviceSynchronize();
 
         std::vector<float> resultOnCPU(result.size());

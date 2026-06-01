@@ -76,11 +76,6 @@ struct GridIndex
     bool operator==(const GridIndex &other) const = default;
 };
 
-inline GridIndex toGridIndex(const GeoSpatial::GridIndex &gridIndex)
-{
-    return {gridIndex.x, gridIndex.y};
-}
-
 class ScaleGridIndexer
 {
     float m_cellSize;
@@ -93,9 +88,9 @@ public:
     explicit ScaleGridIndexer(float cellSize = 1)
             : m_cellSize{cellSize},
               m_minX{(int) std::floorf(-180 / m_cellSize)},
-              m_maxX{-m_minX - 1},
+              m_maxX{-m_minX},
               m_minY{(int) std::floorf(-90 / m_cellSize)},
-              m_maxY{-m_minY - 1}
+              m_maxY{-m_minY}
     {
         assert(cellSize >= std::numeric_limits<float>::epsilon());
     }
@@ -153,12 +148,11 @@ public:
         }
     }
 
-    ~GeoHashGrid()
+    ~GeoHashGrid() noexcept
     {
         thrust::host_vector<cuda::std::span<PointDataType>> cells(m_cells);
-        for (auto cell: cells) {
-            if (cell.data()) cudaFree(cell.data());
-        }
+        for (auto cell: cells)
+            cudaFree(cell.data());
     }
 
     GeoHashGridView view() const
@@ -238,7 +232,7 @@ public:
                             result.emplace_back(cuda::std::make_pair(point, distSq));
                         } else {
                             auto it = cuda::std::max_element(result.begin(), result.end(),
-                                                             [](const auto &a,const auto &b) {
+                                                             [](const auto &a, const auto &b) {
                                                                  return a.second < b.second;
                                                              });
                             if (distSq < it->second) {
